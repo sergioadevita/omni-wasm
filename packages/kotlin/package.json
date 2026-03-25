@@ -15,7 +15,7 @@
   "keywords": ["wasm", "webassembly", "kotlin", "browser", "no-server"],
   "license": "MIT",
   "dependencies": {
-    "@omni-wasm/shared": "workspace:*"
+    "@omni-wasm/shared": "*"
   },
   "peerDependencies": {},
   "repository": {
