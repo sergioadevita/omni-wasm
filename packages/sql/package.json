@@ -1,26 +1,54 @@
 {
   "name": "@omni-wasm/sql",
   "version": "0.1.0",
-  "description": "Browser-native SQL execution via WebAssembly. No server required.",
+  "description": "Browser-native SQL (SQLite) execution via WebAssembly. Own build from source, no server required.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./wasm/sqlite3.js": "./dist/wasm/sqlite3.js",
+    "./wasm/sqlite3.wasm": "./dist/wasm/sqlite3.wasm"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "build": "echo 'TODO: implement build'",
-    "build:wasm": "echo 'TODO: implement WASM build'",
-    "test": "echo 'TODO: implement tests'",
+    "build": "npm run build:ts",
+    "build:ts": "tsc && npm run copy:wasm",
+    "build:wasm": "docker build -t omni-wasm-sql . && docker run --rm -v $(pwd)/dist/wasm:/output omni-wasm-sql",
+    "build:all": "npm run build:wasm && npm run build:ts",
+    "copy:wasm": "mkdir -p dist/wasm && cp -r src/wasm/* dist/wasm/ 2>/dev/null || true",
+    "test": "node --test tests/",
     "clean": "rm -rf dist"
   },
-  "keywords": ["wasm", "webassembly", "sql", "browser", "no-server"],
+  "keywords": [
+    "wasm",
+    "webassembly",
+    "sql",
+    "sqlite",
+    "sqlite3",
+    "browser",
+    "no-server",
+    "emscripten"
+  ],
   "license": "MIT",
+  "author": "Sergio De Vita",
   "dependencies": {
     "@omni-wasm/shared": "*"
   },
-  "peerDependencies": {},
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/sergioadevita/omni-wasm.git",
     "directory": "packages/sql"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }

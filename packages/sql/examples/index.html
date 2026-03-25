@@ -2,41 +2,206 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>@omni-wasm/sql — Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>@omni-wasm/sql — Browser Demo</title>
   <style>
-    body { font-family: monospace; max-width: 800px; margin: 2rem auto; }
-    textarea { width: 100%; height: 200px; font-family: monospace; }
-    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem; overflow-x: auto; }
-    button { padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 2rem;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    h1 { color: #58a6ff; margin-bottom: 0.5rem; font-size: 1.5rem; }
+    .subtitle { color: #8b949e; margin-bottom: 1.5rem; font-size: 0.9rem; }
+    .status {
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      font-size: 0.85rem;
+    }
+    .status.loading { background: #161b22; border: 1px solid #30363d; }
+    .status.ready { background: #0d2818; border: 1px solid #238636; color: #3fb950; }
+    .status.error { background: #2d1216; border: 1px solid #da3633; color: #f85149; }
+    textarea {
+      width: 100%;
+      min-height: 220px;
+      background: #161b22;
+      color: #e6edf3;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 1rem;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 14px;
+      line-height: 1.5;
+      resize: vertical;
+      tab-size: 2;
+    }
+    textarea:focus { outline: none; border-color: #58a6ff; }
+    .controls { display: flex; gap: 0.5rem; align-items: center; margin: 1rem 0; }
+    button {
+      padding: 0.5rem 1.5rem;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+    button.run { background: #238636; color: #fff; border-color: #238636; }
+    button.run:hover { background: #2ea043; }
+    button.run:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.reset { background: #21262d; color: #c9d1d9; }
+    button.reset:hover { background: #30363d; }
+    .output-label { font-size: 0.85rem; color: #8b949e; margin-bottom: 0.25rem; }
+    .output {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 1rem;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      min-height: 60px;
+      max-height: 400px;
+      overflow-y: auto;
+      margin-bottom: 1rem;
+    }
+    .output.stdout { color: #e6edf3; }
+    .output.stderr { color: #f85149; }
+    .meta { font-size: 0.8rem; color: #8b949e; }
   </style>
 </head>
 <body>
   <h1>@omni-wasm/sql</h1>
-  <p>SQL execution in the browser. No server.</p>
-  <textarea id="code">// Write your SQL code here</textarea>
-  <br><br>
-  <button onclick="run()">Run</button>
-  <h2>Output</h2>
-  <pre id="output">Press "Run" to execute.</pre>
+  <p class="subtitle">SQLite running in the browser via WebAssembly. Persistent in-memory database. No server, no API calls.</p>
+
+  <div id="status" class="status loading">Loading SQLite runtime...</div>
+
+  <textarea id="code" spellcheck="false">-- SQLite running in WebAssembly!
+-- The database persists between runs (click "Reset DB" to clear).
+
+CREATE TABLE IF NOT EXISTS games (
+  id INTEGER PRIMARY KEY,
+  title TEXT NOT NULL,
+  genre TEXT,
+  year INTEGER,
+  rating REAL
+);
+
+INSERT OR IGNORE INTO games VALUES
+  (1, 'The Legend of Zelda', 'Adventure', 1986, 9.2),
+  (2, 'Super Mario Bros', 'Platformer', 1985, 9.5),
+  (3, 'Doom', 'FPS', 1993, 9.0),
+  (4, 'Minecraft', 'Sandbox', 2011, 9.3),
+  (5, 'Portal', 'Puzzle', 2007, 9.4),
+  (6, 'Tetris', 'Puzzle', 1984, 8.8);
+
+-- Query with formatting
+.headers on
+.mode column
+
+SELECT title, genre, year, rating
+FROM games
+WHERE rating > 9.0
+ORDER BY rating DESC;
+
+-- Aggregate queries
+SELECT genre, COUNT(*) as count, ROUND(AVG(rating), 1) as avg_rating
+FROM games
+GROUP BY genre
+ORDER BY avg_rating DESC;
+</textarea>
+
+  <div class="controls">
+    <button id="runBtn" class="run" disabled>Run (Ctrl+Enter)</button>
+    <button id="resetBtn" class="reset" disabled>Reset DB</button>
+  </div>
+
+  <div class="output-label">stdout:</div>
+  <div id="stdout" class="output stdout"></div>
+
+  <div class="output-label">stderr:</div>
+  <div id="stderr" class="output stderr"></div>
+
+  <div id="meta" class="meta"></div>
+
   <script type="module">
-    import createRuntime from '../dist/index.js';
+    const base = window.location.pathname.includes('/examples')
+      ? '../dist/index.js'
+      : '/packages/sql/dist/index.js';
+    const { default: createRuntime } = await import(base);
 
-    let runtime;
+    const statusEl = document.getElementById('status');
+    const codeEl = document.getElementById('code');
+    const stdoutEl = document.getElementById('stdout');
+    const stderrEl = document.getElementById('stderr');
+    const metaEl = document.getElementById('meta');
+    const runBtn = document.getElementById('runBtn');
+    const resetBtn = document.getElementById('resetBtn');
 
-    window.run = async () => {
-      const output = document.getElementById('output');
-      const code = document.getElementById('code').value;
+    let runtime = null;
+
+    async function init() {
       try {
-        if (!runtime) {
-          output.textContent = 'Loading SQL runtime...';
-          runtime = await createRuntime();
-        }
-        const result = await runtime.execute(code);
-        output.textContent = result.stdout + (result.stderr ? '\nSTDERR:\n' + result.stderr : '');
-      } catch (e) {
-        output.textContent = 'Error: ' + e.message;
+        runtime = await createRuntime({
+          onProgress: (p) => {
+            statusEl.textContent = `Loading SQLite runtime... ${p}%`;
+          },
+        });
+        statusEl.textContent = `Ready — ${runtime.version}`;
+        statusEl.className = 'status ready';
+        runBtn.disabled = false;
+        resetBtn.disabled = false;
+      } catch (err) {
+        statusEl.textContent = `Failed to load: ${err.message}`;
+        statusEl.className = 'status error';
+        console.error(err);
       }
-    };
+    }
+
+    async function run() {
+      if (!runtime) return;
+      runBtn.disabled = true;
+      stdoutEl.textContent = '';
+      stderrEl.textContent = '';
+      metaEl.textContent = 'Running...';
+
+      try {
+        const result = await runtime.execute(codeEl.value);
+        stdoutEl.textContent = result.stdout || '(no output)';
+        stderrEl.textContent = result.stderr || '(no errors)';
+        metaEl.textContent = `Exit code: ${result.exitCode} | Duration: ${result.duration.toFixed(1)}ms`;
+      } catch (err) {
+        stderrEl.textContent = err.message;
+        metaEl.textContent = 'Execution failed';
+      }
+      runBtn.disabled = false;
+    }
+
+    runBtn.addEventListener('click', run);
+    resetBtn.addEventListener('click', async () => {
+      if (runtime) {
+        await runtime.reset();
+        stdoutEl.textContent = '';
+        stderrEl.textContent = '';
+        metaEl.textContent = 'Database reset — fresh empty database.';
+      }
+    });
+
+    codeEl.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); run(); }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const s = codeEl.selectionStart;
+        codeEl.value = codeEl.value.substring(0, s) + '  ' + codeEl.value.substring(codeEl.selectionEnd);
+        codeEl.selectionStart = codeEl.selectionEnd = s + 2;
+      }
+    });
+
+    init();
   </script>
 </body>
 </html>
