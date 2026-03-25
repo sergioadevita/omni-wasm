@@ -1,26 +1,39 @@
 {
   "name": "@omni-wasm/c",
   "version": "0.1.0",
-  "description": "Browser-native C execution via WebAssembly. No server required.",
+  "description": "Browser-native C interpretation via WebAssembly. picoc interpreter built from source, no server required.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "files": ["dist"],
   "scripts": {
-    "build": "echo 'TODO: implement build'",
-    "build:wasm": "echo 'TODO: implement WASM build'",
-    "test": "echo 'TODO: implement tests'",
+    "build": "npm run build:ts",
+    "build:ts": "tsc && npm run copy:wasm",
+    "build:wasm": "docker build -t omni-wasm-c . && docker run --rm -v $(pwd)/dist/wasm:/output omni-wasm-c",
+    "build:all": "npm run build:wasm && npm run build:ts",
+    "copy:wasm": "mkdir -p dist/wasm && cp -r src/wasm/* dist/wasm/ 2>/dev/null || true",
+    "test": "node --test tests/",
     "clean": "rm -rf dist"
   },
-  "keywords": ["wasm", "webassembly", "c", "browser", "no-server"],
+  "keywords": ["wasm", "webassembly", "c", "picoc", "interpreter", "browser", "no-server", "emscripten"],
   "license": "MIT",
+  "author": "Sergio De Vita",
   "dependencies": {
     "@omni-wasm/shared": "*"
   },
-  "peerDependencies": {},
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/sergioadevita/omni-wasm.git",
     "directory": "packages/c"
-  }
+  },
+  "engines": { "node": ">=20.0.0" }
 }
