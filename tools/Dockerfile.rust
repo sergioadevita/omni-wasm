@@ -1,0 +1,28 @@
+# Base Dockerfile for Rust-to-WASM builds.
+# Used by: PowerShell, GDScript, VHDL (comprehensive custom interpreters in Rust).
+#
+# Usage:
+#   docker build -f tools/Dockerfile.rust --build-arg LANGUAGE=powershell -t omni-wasm-powershell .
+#   docker run --rm -v $(pwd)/packages/powershell/dist:/output omni-wasm-powershell
+#
+FROM rust:1.77-slim
+
+ARG LANGUAGE
+ENV LANGUAGE=${LANGUAGE}
+
+# Install wasm target
+RUN rustup target add wasm32-unknown-unknown && \
+    cargo install wasm-pack wasm-opt
+
+WORKDIR /build
+
+# Copy the language-specific Rust project
+COPY packages/${LANGUAGE}/rust/ /build/
+
+# Build to WASM
+RUN wasm-pack build --target web --release && \
+    wasm-opt -Oz pkg/*.wasm -o pkg/optimized.wasm
+
+# Output
+RUN mkdir -p /build/output && cp -r pkg/* /build/output/
+CMD ["cp", "-r", "/build/output/.", "/output/"]

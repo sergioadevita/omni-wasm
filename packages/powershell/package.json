@@ -1,0 +1,26 @@
+{
+  "name": "@omni-wasm/powershell",
+  "version": "0.1.0",
+  "description": "Browser-native PowerShell execution via WebAssembly. No server required.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "echo 'TODO: implement build'",
+    "build:wasm": "echo 'TODO: implement WASM build'",
+    "test": "echo 'TODO: implement tests'",
+    "clean": "rm -rf dist"
+  },
+  "keywords": ["wasm", "webassembly", "powershell", "browser", "no-server"],
+  "license": "MIT",
+  "dependencies": {
+    "@omni-wasm/shared": "workspace:*"
+  },
+  "peerDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sergioadevita/omni-wasm.git",
+    "directory": "packages/powershell"
+  }
+}

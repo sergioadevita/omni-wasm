@@ -1,0 +1,30 @@
+{
+  "name": "omni-wasm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser-native WASM runtimes for every programming language. No server required.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sergioadevita/omni-wasm.git"
+  },
+  "author": "Sergio De Vita",
+  "license": "MIT",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present",
+    "lint": "eslint packages/*/src/**/*.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "eslint": "^9.0.0",
+    "@types/node": "^20.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

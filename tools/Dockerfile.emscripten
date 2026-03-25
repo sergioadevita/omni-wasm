@@ -1,0 +1,23 @@
+# Base Dockerfile for Emscripten-based WASM builds.
+# Used by: Python, Lua, SQL, C, C++, Bash, Perl, Tcl, COBOL, Fortran, Octave, Julia, etc.
+#
+# Usage:
+#   docker build -f tools/Dockerfile.emscripten --build-arg LANGUAGE=lua -t omni-wasm-lua .
+#   docker run --rm -v $(pwd)/packages/lua/dist:/output omni-wasm-lua
+#
+FROM emscripten/emsdk:3.1.56
+
+ARG LANGUAGE
+ENV LANGUAGE=${LANGUAGE}
+
+WORKDIR /build
+
+# Copy the language-specific build script
+COPY packages/${LANGUAGE}/build.sh /build/build.sh
+RUN chmod +x /build/build.sh
+
+# Run the build
+RUN /build/build.sh
+
+# Output directory — mount a volume here to extract the built WASM files
+CMD ["cp", "-r", "/build/output/.", "/output/"]
