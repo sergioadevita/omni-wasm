@@ -1,21 +1,25 @@
 {
   "name": "@omni-wasm/cpp",
   "version": "0.1.0",
-  "description": "Browser-native C++ execution via WebAssembly. No server required.",
+  "description": "Browser-native C++ execution via JSCPP interpreter. No server required.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": ["dist"],
   "scripts": {
-    "build": "echo 'TODO: implement build'",
-    "build:wasm": "echo 'TODO: implement WASM build'",
-    "test": "echo 'TODO: implement tests'",
+    "build": "tsc",
+    "build:wasm": "echo 'JSCPP is pure JS, no WASM build needed'",
+    "test": "node --test dist/tests/runtime.test.js",
     "clean": "rm -rf dist"
   },
-  "keywords": ["wasm", "webassembly", "cpp", "browser", "no-server"],
+  "keywords": ["wasm", "webassembly", "cpp", "c++", "browser", "no-server", "jscpp"],
   "license": "MIT",
   "dependencies": {
     "@omni-wasm/shared": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
   },
   "peerDependencies": {},
   "repository": {

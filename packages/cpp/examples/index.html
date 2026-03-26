@@ -2,41 +2,189 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>@omni-wasm/cpp — Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>@omni-wasm/cpp — Browser Demo</title>
   <style>
-    body { font-family: monospace; max-width: 800px; margin: 2rem auto; }
-    textarea { width: 100%; height: 200px; font-family: monospace; }
-    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem; overflow-x: auto; }
-    button { padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+      background: #0d1117; color: #c9d1d9; padding: 2rem; max-width: 960px; margin: 0 auto;
+    }
+    h1 { color: #58a6ff; margin-bottom: 0.5rem; font-size: 1.5rem; }
+    .subtitle { color: #8b949e; margin-bottom: 1.5rem; font-size: 0.9rem; }
+    .status { padding: 0.5rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.85rem; }
+    .status.loading { background: #161b22; border: 1px solid #30363d; }
+    .status.ready { background: #0d2818; border: 1px solid #238636; color: #3fb950; }
+    .status.error { background: #2d1216; border: 1px solid #da3633; color: #f85149; }
+    textarea {
+      width: 100%; min-height: 300px; background: #161b22; color: #e6edf3;
+      border: 1px solid #30363d; border-radius: 6px; padding: 1rem;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 14px; line-height: 1.5; resize: vertical; tab-size: 4;
+    }
+    textarea:focus { outline: none; border-color: #58a6ff; }
+    .controls { display: flex; gap: 0.5rem; align-items: center; margin: 1rem 0; }
+    button { padding: 0.5rem 1.5rem; border: 1px solid #30363d; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500; }
+    button.run { background: #238636; color: #fff; border-color: #238636; }
+    button.run:hover { background: #2ea043; }
+    button.run:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.reset { background: #21262d; color: #c9d1d9; }
+    button.reset:hover { background: #30363d; }
+    .output-label { font-size: 0.85rem; color: #8b949e; margin-bottom: 0.25rem; }
+    .output {
+      background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 1rem;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 13px; line-height: 1.5; white-space: pre-wrap;
+      min-height: 60px; max-height: 300px; overflow-y: auto; margin-bottom: 1rem;
+    }
+    .output.stdout { color: #e6edf3; }
+    .output.stderr { color: #f85149; }
+    .meta { font-size: 0.8rem; color: #8b949e; }
   </style>
 </head>
 <body>
   <h1>@omni-wasm/cpp</h1>
-  <p>C++ execution in the browser. No server.</p>
-  <textarea id="code">// Write your C++ code here</textarea>
-  <br><br>
-  <button onclick="run()">Run</button>
-  <h2>Output</h2>
-  <pre id="output">Press "Run" to execute.</pre>
+  <p class="subtitle">C++ running in the browser via JSCPP interpreter. No server, no compilation.</p>
+
+  <div id="status" class="status loading">Loading JSCPP runtime...</div>
+
+  <textarea id="code" spellcheck="false">#include <iostream>
+#include <string>
+using namespace std;
+
+class Person {
+  public:
+    string name;
+    int age;
+    Person(string n, int a) : name(n), age(a) {}
+    void introduce() {
+      cout << "Hello, I'm " << name << " and I'm " << age << " years old." << endl;
+    }
+};
+
+int main() {
+  cout << "=== C++ in WebAssembly (JSCPP) ===" << endl << endl;
+
+  // Array and loops
+  cout << "Squares of 1-5:" << endl;
+  for (int i = 1; i <= 5; i++) {
+    cout << "  " << i << "^2 = " << (i * i) << endl;
+  }
+
+  // Strings
+  cout << endl << "String manipulation:" << endl;
+  string greeting = "Hello";
+  greeting += ", C++!";
+  cout << "  " << greeting << endl;
+
+  // Classes
+  cout << endl << "Objects:" << endl;
+  Person alice("Alice", 25);
+  Person bob("Bob", 30);
+  alice.introduce();
+  bob.introduce();
+
+  // Math
+  cout << endl << "Math:" << endl;
+  int sum = 0;
+  for (int i = 1; i <= 10; i++) {
+    sum += i;
+  }
+  cout << "  Sum of 1-10: " << sum << endl;
+  cout << "  Factorial of 5: " << (5*4*3*2*1) << endl;
+
+  return 0;
+}</textarea>
+
+  <div class="controls">
+    <button id="runBtn" class="run" disabled>Run (Ctrl+Enter)</button>
+    <button id="resetBtn" class="reset" disabled>Reset</button>
+  </div>
+
+  <div class="output-label">stdout:</div>
+  <div id="stdout" class="output stdout"></div>
+  <div class="output-label">stderr:</div>
+  <div id="stderr" class="output stderr"></div>
+  <div id="meta" class="meta"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/JSCPP@2.0.3/dist/JSCPP.es5.min.js"></script>
   <script type="module">
-    import createRuntime from '../dist/index.js';
+    const statusEl = document.getElementById('status');
+    const codeEl = document.getElementById('code');
+    const stdoutEl = document.getElementById('stdout');
+    const stderrEl = document.getElementById('stderr');
+    const metaEl = document.getElementById('meta');
+    const runBtn = document.getElementById('runBtn');
+    const resetBtn = document.getElementById('resetBtn');
 
-    let runtime;
+    let jscpp = null;
 
-    window.run = async () => {
-      const output = document.getElementById('output');
-      const code = document.getElementById('code').value;
+    async function init() {
       try {
-        if (!runtime) {
-          output.textContent = 'Loading C++ runtime...';
-          runtime = await createRuntime();
+        // JSCPP should already be loaded as a global
+        jscpp = window.JSCPP;
+        if (!jscpp) {
+          throw new Error('JSCPP not loaded');
         }
-        const result = await runtime.execute(code);
-        output.textContent = result.stdout + (result.stderr ? '\nSTDERR:\n' + result.stderr : '');
-      } catch (e) {
-        output.textContent = 'Error: ' + e.message;
+        statusEl.textContent = 'Ready — C++ via JSCPP 2.0.3';
+        statusEl.className = 'status ready';
+        runBtn.disabled = false;
+        resetBtn.disabled = false;
+      } catch (err) {
+        statusEl.textContent = `Failed to load: ${err.message}`;
+        statusEl.className = 'status error';
+        console.error(err);
       }
-    };
+    }
+
+    async function run() {
+      if (!jscpp) return;
+      runBtn.disabled = true;
+      stdoutEl.textContent = '';
+      stderrEl.textContent = '';
+      metaEl.textContent = 'Running...';
+
+      const code = codeEl.value;
+      const start = performance.now();
+      const stdoutChunks = [];
+      const stderrChunks = [];
+
+      try {
+        const exitCode = jscpp.run(code, '', {
+          stdio: {
+            write: (text) => {
+              stdoutChunks.push(text);
+            },
+          },
+        });
+
+        const duration = performance.now() - start;
+        const stdout = stdoutChunks.join('');
+        const stderr = stderrChunks.join('');
+
+        stdoutEl.textContent = stdout || '(no output)';
+        stderrEl.textContent = stderr || '(no errors)';
+        metaEl.textContent = `Exit code: ${exitCode} | Duration: ${duration.toFixed(1)}ms`;
+      } catch (err) {
+        const duration = performance.now() - start;
+        stderrEl.textContent = err.message;
+        metaEl.textContent = `Execution failed | Duration: ${duration.toFixed(1)}ms`;
+      }
+      runBtn.disabled = false;
+    }
+
+    runBtn.addEventListener('click', run);
+    resetBtn.addEventListener('click', () => {
+      stdoutEl.textContent = '';
+      stderrEl.textContent = '';
+      metaEl.textContent = 'Runtime reset.';
+    });
+    codeEl.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); run(); }
+      if (e.key === 'Tab') { e.preventDefault(); const s = codeEl.selectionStart; codeEl.value = codeEl.value.substring(0, s) + '    ' + codeEl.value.substring(codeEl.selectionEnd); codeEl.selectionStart = codeEl.selectionEnd = s + 4; }
+    });
+
+    init();
   </script>
 </body>
 </html>
