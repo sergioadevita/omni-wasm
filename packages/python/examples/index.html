@@ -2,41 +2,229 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>@omni-wasm/python — Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>@omni-wasm/python — Browser Demo</title>
   <style>
-    body { font-family: monospace; max-width: 800px; margin: 2rem auto; }
-    textarea { width: 100%; height: 200px; font-family: monospace; }
-    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem; overflow-x: auto; }
-    button { padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+      background: #0d1117; color: #c9d1d9; padding: 2rem; max-width: 960px; margin: 0 auto;
+    }
+    h1 { color: #58a6ff; margin-bottom: 0.5rem; font-size: 1.5rem; }
+    .subtitle { color: #8b949e; margin-bottom: 1.5rem; font-size: 0.9rem; }
+    .status { padding: 0.5rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.85rem; }
+    .status.loading { background: #161b22; border: 1px solid #30363d; }
+    .status.ready { background: #0d2818; border: 1px solid #238636; color: #3fb950; }
+    .status.error { background: #2d1216; border: 1px solid #da3633; color: #f85149; }
+    textarea {
+      width: 100%; min-height: 300px; background: #161b22; color: #e6edf3;
+      border: 1px solid #30363d; border-radius: 6px; padding: 1rem;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 14px; line-height: 1.5; resize: vertical; tab-size: 4;
+    }
+    textarea:focus { outline: none; border-color: #58a6ff; }
+    .controls { display: flex; gap: 0.5rem; align-items: center; margin: 1rem 0; }
+    button { padding: 0.5rem 1.5rem; border: 1px solid #30363d; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500; }
+    button.run { background: #238636; color: #fff; border-color: #238636; }
+    button.run:hover { background: #2ea043; }
+    button.run:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.reset { background: #21262d; color: #c9d1d9; }
+    button.reset:hover { background: #30363d; }
+    .output-label { font-size: 0.85rem; color: #8b949e; margin-bottom: 0.25rem; }
+    .output {
+      background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 1rem;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 13px; line-height: 1.5; white-space: pre-wrap;
+      min-height: 60px; max-height: 300px; overflow-y: auto; margin-bottom: 1rem;
+    }
+    .output.stdout { color: #e6edf3; }
+    .output.stderr { color: #f85149; }
+    .meta { font-size: 0.8rem; color: #8b949e; }
   </style>
 </head>
 <body>
   <h1>@omni-wasm/python</h1>
-  <p>Python execution in the browser. No server.</p>
-  <textarea id="code">// Write your Python code here</textarea>
-  <br><br>
-  <button onclick="run()">Run</button>
-  <h2>Output</h2>
-  <pre id="output">Press "Run" to execute.</pre>
+  <p class="subtitle">Python running in the browser via CPython + Pyodide + WebAssembly. No server, no API calls.</p>
+
+  <div id="status" class="status loading">Loading Python runtime (this may take a moment — ~7.5 MB WASM)...</div>
+
+  <textarea id="code" spellcheck="false">import json
+import math
+from collections import Counter
+
+print("=== Python running in WebAssembly! ===\n")
+
+# List comprehension + sorting
+players = [
+    {"name": "Alice", "score": 950},
+    {"name": "Bob", "score": 1200},
+    {"name": "Charlie", "score": 800},
+    {"name": "Diana", "score": 1100},
+    {"name": "Eve", "score": 1050},
+]
+
+print("Leaderboard:")
+for i, p in enumerate(sorted(players, key=lambda x: x["score"], reverse=True), 1):
+    print(f"  {i}. {p['name']} — {p['score']} pts")
+
+# Fibonacci
+fib = [0, 1]
+for _ in range(18):
+    fib.append(fib[-1] + fib[-2])
+print(f"\nFibonacci: {fib}")
+
+# Counter
+words = "the quick brown fox jumps over the lazy dog the fox".split()
+counts = Counter(words).most_common(3)
+print(f"\nTop 3 words: {counts}")
+
+# Math
+print(f"\npi = {math.pi:.10f}")
+print(f"e  = {math.e:.10f}")
+
+# Dict comprehension + JSON
+squares = {str(n): n**2 for n in range(1, 11)}
+print(f"\nSquares:\n{json.dumps(squares, indent=2)}")</textarea>
+
+  <div class="controls">
+    <button id="runBtn" class="run" disabled>Run (Ctrl+Enter)</button>
+    <button id="resetBtn" class="reset" disabled>Reset</button>
+  </div>
+
+  <div class="output-label">stdout:</div>
+  <div id="stdout" class="output stdout"></div>
+  <div class="output-label">stderr:</div>
+  <div id="stderr" class="output stderr"></div>
+  <div id="meta" class="meta"></div>
+
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
   <script type="module">
-    import createRuntime from '../dist/index.js';
+    const statusEl = document.getElementById('status');
+    const codeEl = document.getElementById('code');
+    const stdoutEl = document.getElementById('stdout');
+    const stderrEl = document.getElementById('stderr');
+    const metaEl = document.getElementById('meta');
+    const runBtn = document.getElementById('runBtn');
+    const resetBtn = document.getElementById('resetBtn');
 
-    let runtime;
+    let pyodide = null;
 
-    window.run = async () => {
-      const output = document.getElementById('output');
-      const code = document.getElementById('code').value;
+    // Capture setup code (mirrors src/index.ts)
+    const CAPTURE_SETUP = `
+import sys as _omni_sys
+import io as _omni_io
+
+class _OmniCapture:
+    def __init__(self):
+        self.stdout = _omni_io.StringIO()
+        self.stderr = _omni_io.StringIO()
+        self._orig_stdout = _omni_sys.stdout
+        self._orig_stderr = _omni_sys.stderr
+    def start(self):
+        self.stdout.truncate(0)
+        self.stdout.seek(0)
+        self.stderr.truncate(0)
+        self.stderr.seek(0)
+        _omni_sys.stdout = self.stdout
+        _omni_sys.stderr = self.stderr
+    def stop(self):
+        _omni_sys.stdout = self._orig_stdout
+        _omni_sys.stderr = self._orig_stderr
+    def get_stdout(self):
+        return self.stdout.getvalue()
+    def get_stderr(self):
+        return self.stderr.getvalue()
+
+_omni_capture = _OmniCapture()
+`;
+
+    async function init() {
       try {
-        if (!runtime) {
-          output.textContent = 'Loading Python runtime...';
-          runtime = await createRuntime();
-        }
-        const result = await runtime.execute(code);
-        output.textContent = result.stdout + (result.stderr ? '\nSTDERR:\n' + result.stderr : '');
-      } catch (e) {
-        output.textContent = 'Error: ' + e.message;
+        statusEl.textContent = 'Loading Python runtime...';
+        pyodide = await loadPyodide({
+          indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/',
+        });
+        pyodide.runPython(CAPTURE_SETUP);
+        statusEl.textContent = `Ready — CPython 3.12 via Pyodide ${pyodide.version}`;
+        statusEl.className = 'status ready';
+        runBtn.disabled = false;
+        resetBtn.disabled = false;
+      } catch (err) {
+        statusEl.textContent = `Failed to load: ${err.message}`;
+        statusEl.className = 'status error';
+        console.error(err);
       }
-    };
+    }
+
+    async function run() {
+      if (!pyodide) return;
+      runBtn.disabled = true;
+      stdoutEl.textContent = '';
+      stderrEl.textContent = '';
+      metaEl.textContent = 'Running...';
+
+      const code = codeEl.value;
+      const start = performance.now();
+
+      try {
+        pyodide.runPython('_omni_capture.start()');
+
+        // Write to virtual FS to avoid escaping issues
+        pyodide.FS.writeFile('/tmp/_demo.py', code);
+        const runner = `
+try:
+    with open('/tmp/_demo.py') as _omni_f:
+        exec(compile(_omni_f.read(), '<user>', 'exec'))
+    _omni_exit_code = 0
+except SystemExit as _omni_e:
+    _omni_exit_code = _omni_e.code if isinstance(_omni_e.code, int) else 1
+except Exception:
+    import traceback
+    _omni_sys.stderr.write(traceback.format_exc())
+    _omni_exit_code = 1
+`;
+        pyodide.runPython(runner);
+        pyodide.runPython('_omni_capture.stop()');
+
+        const stdout = pyodide.runPython('_omni_capture.get_stdout()');
+        const stderr = pyodide.runPython('_omni_capture.get_stderr()');
+        const exitCode = pyodide.runPython('_omni_exit_code');
+        const duration = performance.now() - start;
+
+        stdoutEl.textContent = stdout || '(no output)';
+        stderrEl.textContent = stderr || '(no errors)';
+        metaEl.textContent = `Exit code: ${exitCode} | Duration: ${duration.toFixed(1)}ms`;
+      } catch (err) {
+        try { pyodide.runPython('_omni_capture.stop()'); } catch {}
+        stderrEl.textContent = err.message;
+        metaEl.textContent = `Execution failed | Duration: ${(performance.now() - start).toFixed(1)}ms`;
+      }
+      runBtn.disabled = false;
+    }
+
+    runBtn.addEventListener('click', run);
+    resetBtn.addEventListener('click', async () => {
+      if (pyodide) {
+        // Re-initialize Pyodide for a clean state
+        statusEl.textContent = 'Resetting...';
+        statusEl.className = 'status loading';
+        pyodide = await loadPyodide({
+          indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/',
+        });
+        pyodide.runPython(CAPTURE_SETUP);
+        stdoutEl.textContent = '';
+        stderrEl.textContent = '';
+        metaEl.textContent = 'Runtime reset.';
+        statusEl.textContent = `Ready — CPython 3.12 via Pyodide ${pyodide.version}`;
+        statusEl.className = 'status ready';
+      }
+    });
+    codeEl.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); run(); }
+      if (e.key === 'Tab') { e.preventDefault(); const s = codeEl.selectionStart; codeEl.value = codeEl.value.substring(0, s) + '    ' + codeEl.value.substring(codeEl.selectionEnd); codeEl.selectionStart = codeEl.selectionEnd = s + 4; }
+    });
+
+    init();
   </script>
 </body>
 </html>
