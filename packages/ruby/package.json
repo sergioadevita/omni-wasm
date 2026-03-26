@@ -7,9 +7,9 @@
   "types": "dist/index.d.ts",
   "files": ["dist"],
   "scripts": {
-    "build": "echo 'TODO: implement build'",
-    "build:wasm": "echo 'TODO: implement WASM build'",
-    "test": "echo 'TODO: implement tests'",
+    "build": "tsc",
+    "build:wasm": "npm run build",
+    "test": "jest",
     "clean": "rm -rf dist"
   },
   "keywords": ["wasm", "webassembly", "ruby", "browser", "no-server"],

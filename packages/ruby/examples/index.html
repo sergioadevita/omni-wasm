@@ -2,41 +2,223 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>@omni-wasm/ruby — Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>@omni-wasm/ruby — Browser Demo</title>
   <style>
-    body { font-family: monospace; max-width: 800px; margin: 2rem auto; }
-    textarea { width: 100%; height: 200px; font-family: monospace; }
-    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem; overflow-x: auto; }
-    button { padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+      background: #0d1117; color: #c9d1d9; padding: 2rem; max-width: 960px; margin: 0 auto;
+    }
+    h1 { color: #58a6ff; margin-bottom: 0.5rem; font-size: 1.5rem; }
+    .subtitle { color: #8b949e; margin-bottom: 1.5rem; font-size: 0.9rem; }
+    .status { padding: 0.5rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.85rem; }
+    .status.loading { background: #161b22; border: 1px solid #30363d; }
+    .status.ready { background: #0d2818; border: 1px solid #238636; color: #3fb950; }
+    .status.error { background: #2d1216; border: 1px solid #da3633; color: #f85149; }
+    textarea {
+      width: 100%; min-height: 300px; background: #161b22; color: #e6edf3;
+      border: 1px solid #30363d; border-radius: 6px; padding: 1rem;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 14px; line-height: 1.5; resize: vertical; tab-size: 2;
+    }
+    textarea:focus { outline: none; border-color: #58a6ff; }
+    .controls { display: flex; gap: 0.5rem; align-items: center; margin: 1rem 0; }
+    button { padding: 0.5rem 1.5rem; border: 1px solid #30363d; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500; }
+    button.run { background: #238636; color: #fff; border-color: #238636; }
+    button.run:hover { background: #2ea043; }
+    button.run:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.reset { background: #21262d; color: #c9d1d9; }
+    button.reset:hover { background: #30363d; }
+    .output-label { font-size: 0.85rem; color: #8b949e; margin-bottom: 0.25rem; }
+    .output {
+      background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 1rem;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+      min-height: 60px; max-height: 300px; overflow-y: auto; margin-bottom: 1rem;
+    }
+    .output.stdout { color: #e6edf3; }
+    .output.stderr { color: #f85149; }
+    .meta { font-size: 0.8rem; color: #8b949e; }
   </style>
 </head>
 <body>
   <h1>@omni-wasm/ruby</h1>
-  <p>Ruby execution in the browser. No server.</p>
-  <textarea id="code">// Write your Ruby code here</textarea>
-  <br><br>
-  <button onclick="run()">Run</button>
-  <h2>Output</h2>
-  <pre id="output">Press "Run" to execute.</pre>
+  <p class="subtitle">Ruby running in the browser via CRuby + ruby.wasm + WebAssembly. No server, no API calls.</p>
+
+  <div id="status" class="status loading">Loading Ruby runtime (this may take a moment — ~15 MB WASM)...</div>
+
+  <textarea id="code" spellcheck="false">puts "=== Ruby running in WebAssembly! ===\n"
+
+# Classes and objects
+class Player
+  attr_accessor :name, :score
+
+  def initialize(name, score)
+    @name = name
+    @score = score
+  end
+
+  def to_s
+    "#{@name}: #{@score} pts"
+  end
+end
+
+players = [
+  Player.new("Alice", 950),
+  Player.new("Bob", 1200),
+  Player.new("Charlie", 800),
+  Player.new("Diana", 1100),
+  Player.new("Eve", 1050),
+]
+
+puts "Leaderboard:"
+players.sort_by { |p| p.score }.reverse.each_with_index do |p, i|
+  puts "  #{i + 1}. #{p}"
+end
+
+# Arrays and blocks
+puts "\nFibonacci:"
+fib = [0, 1]
+18.times { fib << fib[-1] + fib[-2] }
+puts fib.inspect
+
+# Hashes
+counts = Hash.new(0)
+"the quick brown fox jumps over the lazy dog the fox".split.each do |word|
+  counts[word] += 1
+end
+puts "\nWord counts:"
+counts.sort_by { |_, c| -c }.first(3).each do |word, count|
+  puts "  #{word}: #{count}x"
+end
+
+# Math and ranges
+puts "\nSquares:"
+(1..10).each { |n| puts "  #{n}**2 = #{n * n}" }</textarea>
+
+  <div class="controls">
+    <button id="runBtn" class="run" disabled>Run (Ctrl+Enter)</button>
+    <button id="resetBtn" class="reset" disabled>Reset</button>
+  </div>
+
+  <div class="output-label">stdout:</div>
+  <div id="stdout" class="output stdout"></div>
+  <div class="output-label">stderr:</div>
+  <div id="stderr" class="output stderr"></div>
+  <div id="meta" class="meta"></div>
+
   <script type="module">
-    import createRuntime from '../dist/index.js';
+    import { DefaultRubyVM } from 'https://cdn.jsdelivr.net/npm/ruby-3_2-wasm-wasi@2.3.0/dist/browser.esm.js';
 
-    let runtime;
+    const RUBY_CDN = 'https://cdn.jsdelivr.net/npm/ruby-3_2-wasm-wasi@2.3.0/dist';
+    const statusEl = document.getElementById('status');
+    const codeEl = document.getElementById('code');
+    const stdoutEl = document.getElementById('stdout');
+    const stderrEl = document.getElementById('stderr');
+    const metaEl = document.getElementById('meta');
+    const runBtn = document.getElementById('runBtn');
+    const resetBtn = document.getElementById('resetBtn');
 
-    window.run = async () => {
-      const output = document.getElementById('output');
-      const code = document.getElementById('code').value;
+    let vm = null;
+
+    async function init() {
       try {
-        if (!runtime) {
-          output.textContent = 'Loading Ruby runtime...';
-          runtime = await createRuntime();
-        }
-        const result = await runtime.execute(code);
-        output.textContent = result.stdout + (result.stderr ? '\nSTDERR:\n' + result.stderr : '');
-      } catch (e) {
-        output.textContent = 'Error: ' + e.message;
+        statusEl.textContent = 'Downloading Ruby WASM (~15 MB)...';
+        const response = await fetch(`${RUBY_CDN}/ruby+stdlib.wasm`);
+        const buffer = await response.arrayBuffer();
+        statusEl.textContent = 'Compiling WASM module...';
+        const wasmModule = await WebAssembly.compile(buffer);
+
+        statusEl.textContent = 'Initializing Ruby VM...';
+        const result = await DefaultRubyVM(wasmModule);
+        vm = result.vm;
+
+        // Set up capture globals
+        vm.eval('require "stringio"');
+        vm.eval('$_omni_orig_stdout = $stdout');
+        vm.eval('$_omni_orig_stderr = $stderr');
+
+        statusEl.textContent = 'Ready — CRuby 3.2 via ruby.wasm 2.3.0';
+        statusEl.className = 'status ready';
+        runBtn.disabled = false;
+        resetBtn.disabled = false;
+      } catch (err) {
+        statusEl.textContent = `Failed to load: ${err.message}`;
+        statusEl.className = 'status error';
+        console.error(err);
       }
-    };
+    }
+
+    async function run() {
+      if (!vm) return;
+      runBtn.disabled = true;
+      stdoutEl.textContent = '';
+      stderrEl.textContent = '';
+      metaEl.textContent = 'Running...';
+
+      const code = codeEl.value;
+      const start = performance.now();
+
+      try {
+        // Redirect stdout/stderr to StringIO
+        vm.eval('$_omni_cap_out = StringIO.new; $_omni_cap_err = StringIO.new');
+        vm.eval('$stdout = $_omni_cap_out; $stderr = $_omni_cap_err');
+
+        // Execute with error handling
+        const runner = `
+begin
+  eval(<<~'_OMNI_END_'
+${code}
+_OMNI_END_
+  )
+  $_omni_exit = 0
+rescue SystemExit => e
+  $_omni_exit = e.status || 1
+rescue Exception => e
+  $stderr.puts "\#{e.class}: \#{e.message}"
+  $stderr.puts e.backtrace.join("\\n") if e.backtrace
+  $_omni_exit = 1
+end
+`;
+        vm.eval(runner);
+
+        // Restore and collect
+        vm.eval('$stdout = $_omni_orig_stdout; $stderr = $_omni_orig_stderr');
+        const stdout = vm.eval('$_omni_cap_out.string').toString();
+        const stderr = vm.eval('$_omni_cap_err.string').toString();
+        let exitCode = 0;
+        try { exitCode = Number(vm.eval('$_omni_exit')); } catch {}
+
+        const duration = performance.now() - start;
+        stdoutEl.textContent = stdout || '(no output)';
+        stderrEl.textContent = stderr || '(no errors)';
+        metaEl.textContent = `Exit code: ${exitCode} | Duration: ${duration.toFixed(1)}ms`;
+      } catch (err) {
+        try { vm.eval('$stdout = $_omni_orig_stdout; $stderr = $_omni_orig_stderr'); } catch {}
+        stderrEl.textContent = err.message;
+        metaEl.textContent = `Execution failed | Duration: ${(performance.now() - start).toFixed(1)}ms`;
+      }
+      runBtn.disabled = false;
+    }
+
+    runBtn.addEventListener('click', run);
+    resetBtn.addEventListener('click', () => {
+      stdoutEl.textContent = '';
+      stderrEl.textContent = '';
+      metaEl.textContent = 'Reset.';
+    });
+    codeEl.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); run(); }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const s = codeEl.selectionStart;
+        codeEl.value = codeEl.value.substring(0, s) + '  ' + codeEl.value.substring(codeEl.selectionEnd);
+        codeEl.selectionStart = codeEl.selectionEnd = s + 2;
+      }
+    });
+
+    init();
   </script>
 </body>
 </html>
